@@ -60,16 +60,12 @@ define([
         for (var ii = 0; ii < cells.length; ii++) {
             var cell = cells[ii];
             if (cell.metadata.python_cell === true) {
-                cell.execute();
-                cell.element.find("div.input").show();
-                cell.element.find("div.output").show();
                 num++;
             }
             else {
-                cell.element.find("div.cell code_cell rendered selected]=").hide();
-                cell.element.find("div.output_wrapper").hide();
                 cell.element.find("div.input").hide();
                 cell.element.find("div.output").hide();
+                delete cell.element;
             }
         }
         console.log(log_prefix, 'finished running ' + num + ' show cell' + (num !== 1 ? 's' : ''));
