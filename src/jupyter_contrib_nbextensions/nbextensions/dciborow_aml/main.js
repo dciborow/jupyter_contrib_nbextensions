@@ -77,7 +77,7 @@ define([
     );
 
     var bash_cell_ui_callback = CellToolbar.utils.checkbox_ui_generator(
-        deep_checkbox,
+        bash_checkbox,
         function setter(cell, value) {
             if (value) {
                 cell.metadata.bash_cell = true;
