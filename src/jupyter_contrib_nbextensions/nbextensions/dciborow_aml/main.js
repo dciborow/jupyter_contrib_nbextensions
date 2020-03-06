@@ -17,15 +17,21 @@ define([
 
     var CellToolbar = celltoolbar.CellToolbar;
 
-    var mod_name = 'python_cell';
-    var log_prefix = '[' + mod_name + ']';
+    var mod_name_py = 'python_cell';
+    var mod_name_r = 'r_cell';
+    var log_prefix = '[' + mod_name_py + ' & ' + mod_name_r + ']';
     var options = { // updated from server's config & nb metadata
         run_on_kernel_ready: true,
     };
 
-    var toolbar_preset_name = 'Python Cell';
+    var toolbar_preset_name = 'Code Type Cell';
+    var python_checkbox = "Python";
+    var r_checkbox = "R";
+    var deep_checkbox = "Deep";
+
+
     var python_cell_ui_callback = CellToolbar.utils.checkbox_ui_generator(
-        toolbar_preset_name,
+        python_checkbox,
         function setter(cell, value) {
             if (value) {
                 cell.metadata.python_cell = true;
@@ -39,8 +45,38 @@ define([
         }
     );
 
+    var r_cell_ui_callback = CellToolbar.utils.checkbox_ui_generator(
+        r_checkbox,
+        function setter(cell, value) {
+            if (value) {
+                cell.metadata.r_cell = true;
+            } else {
+                delete cell.metadata.r_cell;
+            }
+        },
+        function getter(cell) {
+            // if python_cell is undefined, it'll be interpreted as false anyway
+            return cell.metadata.r_cell;
+        }
+    );
+
+    var dl_cell_ui_callback = CellToolbar.utils.checkbox_ui_generator(
+        deep_checkbox,
+        function setter(cell, value) {
+            if (value) {
+                cell.metadata.dl_cell = true;
+            } else {
+                delete cell.metadata.dl_cell;
+            }
+        },
+        function getter(cell) {
+            // if python_cell is undefined, it'll be interpreted as false anyway
+            return cell.metadata.dl_cell;
+        }
+    );
+
     function count_python_cells() {
-        console.log(log_prefix, 'counting initialization cells');
+        console.log(log_prefix, 'counting python cells');
         var num = 0;
         var cells = Jupyter.notebook.get_cells();
         for (var ii = 0; ii < cells.length; ii++) {
@@ -49,23 +85,37 @@ define([
                 num++;
             }
         }
-        console.log(log_prefix, 'found ' + num + ' initialization cell' + (num !== 1 ? 's' : ''));
+        console.log(log_prefix, 'found ' + num + ' python cell' + (num !== 1 ? 's' : ''));
         return num
     }
 
-    function show_python_cells() {
+    function show_hide_cells() {
         console.log(log_prefix, 'Setting Cell Visibility');
         var num = 0;
         var cells = Jupyter.notebook.get_cells();
         for (var ii = 0; ii < cells.length; ii++) {
             var cell = cells[ii];
             if (cell.metadata.python_cell === true) {
-                num++;
+                if (Jupyter.notebook.metadata.kernelspec.language != 'python') {
+                    cell.element.find("div.input").hide();
+                    cell.element.find("div.output").hide();
+                    cell.element.hide();
+                } else {
+                    cell.element.show();
+                    cell.element.find("div.input").show();
+                    cell.element.find("div.output").show();
+                }
             }
-            else {
-                cell.element.find("div.input").hide();
-                cell.element.find("div.output").hide();
-                delete cell.element;
+            if (cell.metadata.r_cell === true) {
+                if (Jupyter.notebook.metadata.kernelspec.language == 'python') {
+                    cell.element.find("div.input").hide();
+                    cell.element.find("div.output").hide();
+                    cell.element.hide();
+                } else {
+                    cell.element.show();
+                    cell.element.find("div.input").show();
+                    cell.element.find("div.output").show();
+                }
             }
         }
         console.log(log_prefix, 'finished running ' + num + ' show cell' + (num !== 1 ? 's' : ''));
@@ -74,12 +124,12 @@ define([
     var load_ipython_extension = function () {
         // register action
         var prefix = 'auto';
-        var action_name = 'run-initialization-cells';
+        var action_name = 'show-hide-code-cells';
         var action = {
             icon: 'fa-calculator',
-            help: 'Run all initialization cells',
+            help: 'Show or Hide code Cells',
             help_index: 'zz',
-            handler: show_python_cells
+            handler: show_hide_cells
         };
         var action_full_name = Jupyter.notebook.keyboard_manager.actions.register(action, action_name, prefix);
 
@@ -89,7 +139,7 @@ define([
         // setup things to run on loading config/notebook
         Jupyter.notebook.config.loaded
             .then(function update_options_from_config() {
-                $.extend(true, options, Jupyter.notebook.config.data[mod_name]);
+                $.extend(true, options, Jupyter.notebook.config.data[mod_name_py]);
             }, function (reason) {
                 console.warn(log_prefix, 'error loading config:', reason);
             })
@@ -105,7 +155,7 @@ define([
 
     function callback_notebook_loaded() {
         // update from metadata
-        var md_opts = Jupyter.notebook.metadata[mod_name];
+        var md_opts = Jupyter.notebook.metadata[mod_name_py];
         if (md_opts !== undefined) {
             console.log(log_prefix, 'updating options from notebook metadata:', md_opts);
             $.extend(true, options, md_opts);
@@ -115,15 +165,18 @@ define([
         if (CellToolbar.list_presets().indexOf(toolbar_preset_name) < 0) {
             // Register a callback to create a UI element for a cell toolbar.
             CellToolbar.register_callback('python_cell.is_python_cell', python_cell_ui_callback, 'code');
+            CellToolbar.register_callback('r_cell.is_r_cell', r_cell_ui_callback, 'code');
+            CellToolbar.register_callback('dl_cell.is_dl_cell', dl_cell_ui_callback, 'code');
             // Register a preset of UI elements forming a cell toolbar.
-            CellToolbar.register_preset(toolbar_preset_name, ['python_cell.is_python_cell'], Jupyter.notebook);
+            CellToolbar.register_preset("Code Cell Type", ['python_cell.is_python_cell', 'r_cell.is_r_cell', 'dl_cell.is_dl_cell'], Jupyter.notebook);
+
         }
         if (options.run_on_kernel_ready) {
             var num = count_python_cells();
 
             if (num) {
                 if (Jupyter.notebook.trusted) {
-                    run_python_cells_asap()
+                    show_hide_code_cells_asap()
                 } else {
                     dialog.modal({
                         title: 'Untrusted notebook with initialization code',
@@ -143,13 +196,13 @@ define([
         }
     }
 
-    function run_python_cells_asap() {
+    function show_hide_code_cells_asap() {
         if (Jupyter.notebook && Jupyter.notebook.kernel && Jupyter.notebook.kernel.info_reply.status === 'ok') {
             // kernel is already ready
-            show_python_cells();
+            show_hide_cells();
         }
         // whenever a (new) kernel  becomes ready, run all initialization cells
-        events.on('kernel_ready.Kernel', show_python_cells);
+        events.on('kernel_ready.Kernel', show_hide_cells);
     }
 
     return {
