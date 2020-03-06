@@ -28,6 +28,7 @@ define([
     var python_checkbox = "Python";
     var r_checkbox = "R";
     var deep_checkbox = "Deep";
+    var bash_checkbox = "Bash";
 
 
     var python_cell_ui_callback = CellToolbar.utils.checkbox_ui_generator(
@@ -75,18 +76,32 @@ define([
         }
     );
 
-    function count_python_cells() {
-        console.log(log_prefix, 'counting python cells');
+    var bash_cell_ui_callback = CellToolbar.utils.checkbox_ui_generator(
+        deep_checkbox,
+        function setter(cell, value) {
+            if (value) {
+                cell.metadata.bash_cell = true;
+            } else {
+                delete cell.metadata.bash_cell;
+            }
+        },
+        function getter(cell) {
+            // if python_cell is undefined, it'll be interpreted as false anyway
+            return cell.metadata.bash_cell;
+        }
+    );
+
+    function show_all_cells() {
+        console.log(log_prefix, 'Setting Cell Visibility');
         var num = 0;
         var cells = Jupyter.notebook.get_cells();
         for (var ii = 0; ii < cells.length; ii++) {
             var cell = cells[ii];
-            if ((cell instanceof codecell.CodeCell) && cell.metadata.python_cell === true) {
-                num++;
-            }
+            cell.element.show();
+            cell.element.find("div.input").show();
+            cell.element.find("div.output").show();
         }
-        console.log(log_prefix, 'found ' + num + ' python cell' + (num !== 1 ? 's' : ''));
-        return num
+        console.log(log_prefix, 'finished running ' + num + ' show cell' + (num !== 1 ? 's' : ''));
     }
 
     function show_hide_cells() {
@@ -117,6 +132,17 @@ define([
                     cell.element.find("div.output").show();
                 }
             }
+            if (cell.metadata.bash_cell === true) {
+                if (Jupyter.notebook.metadata.kernelspec.language != 'Bash') {
+                    cell.element.find("div.input").hide();
+                    cell.element.find("div.output").hide();
+                    cell.element.hide();
+                } else {
+                    cell.element.show();
+                    cell.element.find("div.input").show();
+                    cell.element.find("div.output").show();
+                }
+            }
         }
         console.log(log_prefix, 'finished running ' + num + ' show cell' + (num !== 1 ? 's' : ''));
     }
@@ -124,12 +150,12 @@ define([
     var load_ipython_extension = function () {
         // register action
         var prefix = 'auto';
-        var action_name = 'show-hide-code-cells';
+        var action_name = 'show_all_cells';
         var action = {
             icon: 'fa-calculator',
-            help: 'Show or Hide code Cells',
+            help: 'Show All Code Cells',
             help_index: 'zz',
-            handler: show_hide_cells
+            handler: show_all_cells
         };
         var action_full_name = Jupyter.notebook.keyboard_manager.actions.register(action, action_name, prefix);
 
@@ -167,32 +193,13 @@ define([
             CellToolbar.register_callback('python_cell.is_python_cell', python_cell_ui_callback, 'code');
             CellToolbar.register_callback('r_cell.is_r_cell', r_cell_ui_callback, 'code');
             CellToolbar.register_callback('dl_cell.is_dl_cell', dl_cell_ui_callback, 'code');
+            CellToolbar.register_callback('bash_cell.is_dl_cell', bash_cell_ui_callback, 'code');
             // Register a preset of UI elements forming a cell toolbar.
-            CellToolbar.register_preset("Code Cell Type", ['python_cell.is_python_cell', 'r_cell.is_r_cell', 'dl_cell.is_dl_cell'], Jupyter.notebook);
+            CellToolbar.register_preset("Code Cell Type", ['python_cell.is_python_cell', 'r_cell.is_r_cell', 'dl_cell.is_dl_cell', 'bash_cell.is_dl_cell'], Jupyter.notebook);
 
         }
         if (options.run_on_kernel_ready) {
-            var num = count_python_cells();
-
-            if (num) {
-                if (Jupyter.notebook.trusted) {
-                    show_hide_code_cells_asap()
-                } else {
-                    dialog.modal({
-                        title: 'Untrusted notebook with initialization code',
-                        body: num + ' initialization code cell' + (num !== 1 ? 's' : '') + ' was found but not run since this notebook is untrusted.',
-                        buttons: {
-                            'Trust notebook': {
-                                'class': 'btn-danger',
-                                'click': () => Jupyter.notebook.trust_notebook()
-                            },
-                            'Do nothing': {'class': 'btn-primary'}
-                        },
-                        notebook: Jupyter.notebook,
-                        keyboard_manager: Jupyter.keyboard_manager,
-                    });
-                }
-            }
+            show_hide_code_cells_asap()
         }
     }
 
